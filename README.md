@@ -10,7 +10,7 @@ relatively easy to make this work.
 ## Running
 This program requires `sudo` to run, or otherwise it won't be able to read key inputs.
 First you have to build it with `./release` (if an error with permission denied shows do `chmod +x ./release` and try again) and
-then you should be able to run it with `sudo ./socd`
+then you should be able to run it with `sudo ./socd`. To exit just hit `ctrl + c` in the terminal its run in.
 
 ## Possible errors
 In case of any errors it would be useful if you submitted an issue with any details regarding it, but here are some which may occur:
