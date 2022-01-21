@@ -19,10 +19,10 @@ void *print_keystates(void *pi);
 #endif
 
 // for indexing the keystates
-#define W 0
-#define A 1
-#define S 2
-#define D 3
+#define UP 0
+#define LEFT 1
+#define DOWN 2
+#define RIGHT 3
 
 // Convenience macro for error handling. arguments should be self explanatory
 #define result_msg(call, fmt, args...) \
@@ -95,6 +95,8 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+    // todo: have to get the custom keys in this gap
+
     if (get_keyboard()) {
         fprintf(stderr, "error: Failed to get keyboards\n");
         exit(1);
@@ -144,10 +146,10 @@ int main(int argc, char **argv) {
         }
 
         // we only want the registered movement keys, and this makes sure no other key makes it to `emit_all()`
-        if (ev[1].code != context.vr_keystates[W].which
-            && ev[1].code != context.vr_keystates[A].which
-            && ev[1].code != context.vr_keystates[S].which
-            && ev[1].code != context.vr_keystates[D].which
+        if (ev[1].code != context.vr_keystates[UP].which
+            && ev[1].code != context.vr_keystates[LEFT].which
+            && ev[1].code != context.vr_keystates[DOWN].which
+            && ev[1].code != context.vr_keystates[RIGHT].which
         ) continue;
 
         // 1: press, 0: release
@@ -166,11 +168,6 @@ int main(int argc, char **argv) {
     #endif
 
     puts("Stopping.");
-
-    // for (int i = 0; i <= 3; ++i) {
-    //     emit(EV_KEY, context.vr_keystates[i].which, 0);
-    //     emit(EV_SYN, SYN_REPORT, 0);
-    // }
 
     // cleanup
     result(ioctl(context.write_fd, UI_DEV_DESTROY));
@@ -197,10 +194,10 @@ void setup_write() {
     result(ioctl(context.write_fd, UI_SET_EVBIT, EV_KEY));
 
     // enable writing the desired keys
-    result(ioctl(context.write_fd, UI_SET_KEYBIT, KEY_W));
-    result(ioctl(context.write_fd, UI_SET_KEYBIT, KEY_A));
-    result(ioctl(context.write_fd, UI_SET_KEYBIT, KEY_S));
-    result(ioctl(context.write_fd, UI_SET_KEYBIT, KEY_D));
+    result(ioctl(context.write_fd, UI_SET_KEYBIT, context.vr_keystates[UP].which));
+    result(ioctl(context.write_fd, UI_SET_KEYBIT, context.vr_keystates[LEFT].which));
+    result(ioctl(context.write_fd, UI_SET_KEYBIT, context.vr_keystates[DOWN].which));
+    result(ioctl(context.write_fd, UI_SET_KEYBIT, context.vr_keystates[RIGHT].which));
 
     struct uinput_setup setup;
     memset(&setup, 0, sizeof(setup));
@@ -234,20 +231,20 @@ void handle_key_down(const struct input_event *ev) {
 
     switch (ev->code) {
     case KEY_W:
-        release_ok(S);
-        context.rl_keystates[W] = 1;
+        release_ok(DOWN);
+        context.rl_keystates[UP] = 1;
         break;
     case KEY_A:
-        release_ok(D);
-        context.rl_keystates[A] = 1;
+        release_ok(RIGHT);
+        context.rl_keystates[LEFT] = 1;
         break;
     case KEY_S:
-        release_ok(W);
-        context.rl_keystates[S] = 1;
+        release_ok(UP);
+        context.rl_keystates[DOWN] = 1;
         break;
     case KEY_D:
-        release_ok(A);
-        context.rl_keystates[D] = 1;
+        release_ok(LEFT);
+        context.rl_keystates[RIGHT] = 1;
         break;
     }
 
@@ -264,24 +261,24 @@ void handle_key_up(const struct input_event *ev) {
 
     switch (ev->code) {
     case KEY_W:
-        press_ok(S);
-        context.rl_keystates[W] = 0;
-        context.vr_keystates[W].pressed = 0;
+        press_ok(DOWN);
+        context.rl_keystates[UP] = 0;
+        context.vr_keystates[UP].pressed = 0;
         break;
     case KEY_A:
-        press_ok(D);
-        context.rl_keystates[A] = 0;
-        context.vr_keystates[A].pressed = 0;
+        press_ok(RIGHT);
+        context.rl_keystates[LEFT] = 0;
+        context.vr_keystates[LEFT].pressed = 0;
         break;
     case KEY_S:
-        press_ok(W);
-        context.rl_keystates[S] = 0;
-        context.vr_keystates[S].pressed = 0;
+        press_ok(UP);
+        context.rl_keystates[DOWN] = 0;
+        context.vr_keystates[DOWN].pressed = 0;
         break;
     case KEY_D:
-        press_ok(A);
-        context.rl_keystates[D] = 0;
-        context.vr_keystates[D].pressed = 0;
+        press_ok(LEFT);
+        context.rl_keystates[RIGHT] = 0;
+        context.vr_keystates[RIGHT].pressed = 0;
         break;
     }
 
@@ -321,14 +318,14 @@ int get_keyboard() {
 
     if ((d = opendir(BY_ID)) != NULL)
         strcpy(context.rd_target, BY_ID);
-    else if ((d = opendir(BY_PATH)) != NULL) {
+    else if ((d = opendir(BY_PATH)) != NULL)
         strcpy(context.rd_target, BY_PATH);
-    } else 
+    else 
         return 1;
 
     char *possible_devices[8];
     int j = -1, selected = 0;
-
+    
     // Iterate throught entries of the chosen directory
     // and select all possible keyboards into `possible_devices`
     while ((dir = readdir(d)) != NULL && j < 8) {
