@@ -1,0 +1,5 @@
+#!/bin/sh
+
+# build without debug printing
+
+gcc -Wall -Wextra -D release -O2 socd.c -o socd

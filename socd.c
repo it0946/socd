@@ -39,19 +39,18 @@ struct keystate { char pressed, which; };
 // The global state of the program
 // - wr_target: write target. this is where the program will be sending input events
 // - write_fd: file descriptor for wr_target
-// - rd_target: read target. this is what the program will read inputs from
+// - rd_target: read target. this is what the program will read inputs from.
+//  275 is from  the max unix filename plus lenght of BY_PATH which is the longer of the two
 // - read_fd: file descriptor for rd_target
 // - rl_keystates: real physical states of the keys on the keyboard
 // - vr_keystates: the virtually emulated states of the keys
 static struct {
-    // char *wr_target, *rd_target, running;
     char *wr_target, rd_target[275], running;
     int write_fd, read_fd, rl_keystates[4];
     struct keystate vr_keystates[4];
 } context = {
     .running = 1,
     .wr_target = "/dev/uinput",
-    // .rd_target = NULL,
     .rd_target = { 0 },
     .rl_keystates = { 0 },
     .vr_keystates = {
@@ -152,7 +151,7 @@ int main(int argc, char **argv) {
     pthread_join(tid, NULL);
     #endif
 
-    puts("stopping.");
+    puts("\nstopping.");
 
     // cleanup
     result(ioctl(context.write_fd, UI_DEV_DESTROY));
@@ -284,6 +283,7 @@ void emit(int type, int code, int value) {
 }
 
 void emit_all() {
+    // todo: this isn't the most ideal solution
     for (int i = 0; i <= 3; ++i) {
         emit(EV_KEY, context.vr_keystates[i].which, 0);
         emit(EV_SYN, SYN_REPORT, 0);
@@ -295,9 +295,6 @@ void emit_all() {
 int get_keyboard() {
     DIR *d;
     struct dirent *dir;
-
-    // max unix filename plus lenght of BY_PATH which is the longer of the two
-    // char *abs_device_path = malloc(sizeof(char) * 275);
 
     if ((d = opendir(BY_ID)) != NULL)
         strcpy(context.rd_target, BY_ID);
@@ -330,12 +327,10 @@ int get_keyboard() {
         possible_devices[j] = tmp;
     }
 
-    if (j == -1) {
-        // free(abs_device_path);
-        return 1;
-    }
+    if (j == -1) return 1;
 
-    // todo: if more than one entry, let the user choose which is the keyboard
+    // todo: if more than one entry, let the user choose which is the keyboard,
+    // or maybe try listening to all possible keyboard devices
     if (j > 0) puts("more than one possible keyboard found: trying the first one");
 
     // full path to the keyboard

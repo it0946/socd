@@ -1,0 +1,5 @@
+#!/bin/sh
+
+# build and run with debug printing
+
+gcc -Wall -Wextra socd.c -o socd -lpthread && sudo ./socd
