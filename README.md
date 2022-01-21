@@ -23,7 +23,7 @@ For now a workaround is to remove the call to `get_keyboard`, and set `rd_target
 I recommend checking checking the original [SOCD cleaners](https://github.com/valignatev/socd) README for that. Note that this does not have all the features of the original and only the basic functionality is the same.
 
 ## The original version
-Shout out to the original version of SOCD cleaner created by @valignatev.
+Shout out to the original version of SOCD cleaner created by [@valignatev](https://github.com/valignatev).
 Repository for the original: https://github.com/valignatev/socd
 
 ## License
