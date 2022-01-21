@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
+#include <dirent.h>
 
 #ifndef release
 
@@ -36,19 +37,21 @@ void *print_keystates(void *pi);
 struct keystate { char pressed, which; };
 
 // The global state of the program
+// - wr_target: write target. this is where the program will be sending input events
+// - write_fd: file descriptor for wr_target
+// - rd_target: read target. this is what the program will read inputs from
+// - read_fd: file descriptor for rd_target
+// - rl_keystates: real physical states of the keys on the keyboard
+// - vr_keystates: the virtually emulated states of the keys
 static struct {
-    char *wr_target, *rd_target;
-    int running, write_fd, read_fd, rl_keystates[4];
+    char *wr_target, *rd_target, running;
+    int write_fd, read_fd, rl_keystates[4];
     struct keystate vr_keystates[4];
 } context = {
     .running = 1,
-    // write target. this is where the program will be sending input events
     .wr_target = "/dev/uinput",
-    // read target. this is what the program will read inputs from
-    .rd_target = "/dev/input/by-id/usb-ASUSTeK_Computer_Inc._N-KEY_Device-event-kbd",
-    // real keystates
+    .rd_target = NULL,
     .rl_keystates = { 0 },
-    // virtual keystates
     .vr_keystates = {
         { 0, KEY_W },
         { 0, KEY_A },
@@ -56,6 +59,11 @@ static struct {
         { 0, KEY_D },
     }
 };
+
+const char *BY_ID = "/dev/input/by-id/";
+const char *BY_PATH = "/dev/input/by-path/";
+
+char *get_keyboard(void);
 
 void sigint_handler(int sig);
 void emit(int type, int code, int value);
@@ -73,12 +81,18 @@ int main(int argc, char **argv) {
 
     // For a graceful shutdown to make sure the device is destroyed
     if (signal(SIGINT, sigint_handler) == SIG_ERR) {
-        fprintf(stderr, "failed to set sigint_handler: %s\n", strerror(errno));
+        fprintf(stderr, "error: Failed to set sigint_handler: %s\n", strerror(errno));
         exit(1);
     }
 
     if (geteuid() != 0) {
         fprintf(stderr, "error: This program requires sudo to access keyboard inputs\n");
+        exit(1);
+    }
+
+    context.rd_target = get_keyboard();
+    if (context.rd_target == NULL) {
+        fprintf(stderr, "error: Failed to get keyboards\n");
         exit(1);
     }
 
@@ -133,15 +147,17 @@ int main(int argc, char **argv) {
         emit_all();
     }
 
-    puts("stopping.");
-
     #ifndef release
     pthread_join(tid, NULL);
     #endif
 
+    puts("stopping.");
+
+    // cleanup
     result(ioctl(context.write_fd, UI_DEV_DESTROY));
     close(context.write_fd);
     close(context.read_fd);
+    free(context.rd_target);
 }
 
 void sigint_handler(int sig) {
@@ -158,6 +174,7 @@ void setup_write() {
 
     result(ioctl(context.write_fd, UI_SET_EVBIT, EV_KEY));
 
+    // enable writing the desired keys
     result(ioctl(context.write_fd, UI_SET_KEYBIT, KEY_W));
     result(ioctl(context.write_fd, UI_SET_KEYBIT, KEY_A));
     result(ioctl(context.write_fd, UI_SET_KEYBIT, KEY_S));
@@ -173,7 +190,6 @@ void setup_write() {
     // random values 
     setup.id.vendor = 0x1234;
     setup.id.product = 0x5678;
-    //
 
     result_msg(
         ioctl(context.write_fd, UI_DEV_SETUP, &setup),
@@ -187,7 +203,7 @@ void setup_write() {
 }
 
 void handle_key_down(const struct input_event *ev) {
-    // more convenience
+    // release opposite virtual key
     #define release_ok(key) \
         if (context.rl_keystates[key]) context.vr_keystates[key].pressed = 0
 
@@ -217,7 +233,7 @@ void handle_key_down(const struct input_event *ev) {
 }
 
 void handle_key_up(const struct input_event *ev) {
-    // even more convenience
+    // press opposite virtual key
     #define press_ok(key) \
         if (context.rl_keystates[key]) context.vr_keystates[key].pressed = 1
 
@@ -254,6 +270,7 @@ void handle_key_up(const struct input_event *ev) {
 void emit(int type, int code, int value) {
     struct input_event event;
 
+    // keycode
     event.code = code;
     // what type of event eg. EV_KEY, EV_SYN
     event.type = type,
@@ -273,6 +290,61 @@ void emit_all() {
         emit(EV_KEY, context.vr_keystates[i].which, context.vr_keystates[i].pressed);
         emit(EV_SYN, SYN_REPORT, 0);
     }
+}
+
+char *get_keyboard() {
+    DIR *d;
+    struct dirent *dir;
+
+    // max unix filename plus lenght of BY_PATH which is the longer of the two
+    char *abs_device_path = malloc(sizeof(char) * 275);
+
+    if ((d = opendir(BY_ID)) != NULL)
+        strcpy(abs_device_path, BY_ID);
+    // fixme: its possible that a computer doesn't have BY_ID,
+    // so this is an alternative, but this is not fully implemented yet and
+    // will yeild no results in the next step
+    else if ((d = opendir(BY_PATH)) != NULL) {
+        // strcpy(abs_device_path, BY_PATH);
+        fprintf(stderr, "error: Not implemented yet\n");
+        return NULL;
+    }
+    else 
+        return NULL;
+
+    char *possible_devices[42];
+    int j = -1;
+
+    // Iterate throught entries of the chosen directory
+    // and select all possible keyboards into `possible_devices`
+    while ((dir = readdir(d)) != NULL) {
+        char *tmp = dir->d_name;
+        int len = strlen(tmp);
+        if (len < 10) continue;
+
+        // keyboards end with "-event-kbd", but the
+        // actual keyboard shouldn't have "-ifxx" before "-event-kbd"
+        if (strncmp(tmp + len - 10, "-event-kbd", 10) != 0
+            || strncmp(tmp + len - 15, "-if", 3) == 0) continue;
+
+        j += 1;
+        possible_devices[j] = tmp;
+    }
+
+    if (j == -1) {
+        free(abs_device_path);
+        return NULL;
+    }
+
+    // todo: if more than one entry, let the user choose which is the keyboard
+    if (j > 0) puts("more than one possible keyboard found: trying the first one");
+
+    // full path to the keyboard
+    strcat(abs_device_path, possible_devices[0]);
+
+    closedir(d);
+
+    return abs_device_path;
 }
 
 #ifndef release
