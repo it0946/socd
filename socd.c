@@ -7,6 +7,7 @@
 #include <string.h>
 #include <signal.h>
 #include <dirent.h>
+#include <termios.h>
 
 #ifndef release
 
@@ -61,10 +62,13 @@ static struct {
     }
 };
 
+// Most likely works
 const char *BY_ID = "/dev/input/by-id/";
+// Some devices may not have the above so this might work instead
 const char *BY_PATH = "/dev/input/by-path/";
 
 int get_keyboard(void);
+int prompt_user(int max);
 
 void sigint_handler(int sig);
 void emit(int type, int code, int value);
@@ -107,7 +111,13 @@ int main(int argc, char **argv) {
     char kbd_name[256];
     ioctl(context.read_fd, EVIOCGNAME(sizeof(kbd_name)), kbd_name);
     
-    printf("Reading inputs from: %s\n", kbd_name);
+    struct termios t_attrs;
+    tcgetattr(STDIN_FILENO, &t_attrs);
+
+    t_attrs.c_lflag &= ~(ECHO | ICANON);
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &t_attrs);
+
+    printf("Reading inputs from: %s. Press ctrl + c to quit\n", kbd_name);
 
     #ifndef release
 
@@ -151,12 +161,15 @@ int main(int argc, char **argv) {
     pthread_join(tid, NULL);
     #endif
 
-    puts("\nstopping.");
+    puts("Stopping.");
 
     // cleanup
     result(ioctl(context.write_fd, UI_DEV_DESTROY));
     close(context.write_fd);
     close(context.read_fd);
+
+    t_attrs.c_lflag &= ~(ECHO | ICANON);
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &t_attrs);
 }
 
 void sigint_handler(int sig) {
@@ -298,22 +311,17 @@ int get_keyboard() {
 
     if ((d = opendir(BY_ID)) != NULL)
         strcpy(context.rd_target, BY_ID);
-    // fixme: its possible that a computer doesn't have BY_ID,
-    // so this is an alternative, but this is not fully implemented yet and
-    // will yeild no results in the next step
     else if ((d = opendir(BY_PATH)) != NULL) {
-        // strcpy(abs_device_path, BY_PATH);
-        fprintf(stderr, "error: Not implemented yet\n");
-        return 1;
+        strcpy(context.rd_target, BY_PATH);
     } else 
         return 1;
 
-    char *possible_devices[42];
-    int j = -1;
+    char *possible_devices[8];
+    int j = -1, selected = 0;
 
     // Iterate throught entries of the chosen directory
     // and select all possible keyboards into `possible_devices`
-    while ((dir = readdir(d)) != NULL) {
+    while ((dir = readdir(d)) != NULL && j < 8) {
         char *tmp = dir->d_name;
         int len = strlen(tmp);
         if (len < 10) continue;
@@ -329,16 +337,38 @@ int get_keyboard() {
 
     if (j == -1) return 1;
 
-    // todo: if more than one entry, let the user choose which is the keyboard,
-    // or maybe try listening to all possible keyboard devices
-    if (j > 0) puts("more than one possible keyboard found: trying the first one");
+    // If more than one possible keyboard is found prompt the user for the one they prefer
+    if (j > 0) {
+        puts("More than one possible keyboard found");
+        for (int i = 0; i <= j; ++i) {
+            printf(" %d. %s\n", i + 1, possible_devices[i]);
+        }
+
+        printf("\nPick one by typing a number from 1-%d:\n", j + 1);
+
+        selected = prompt_user(j);
+    }
 
     // full path to the keyboard
-    strcat(context.rd_target, possible_devices[0]);
+    strcat(context.rd_target, possible_devices[selected]);
 
     closedir(d);
 
     return 0;
+}
+
+int prompt_user(int max) {
+    char c;
+
+    while (1) {
+        read(STDIN_FILENO, &c, 1);
+        if (c <= '0' || c >= '9' || c - '0' - 1 > max) continue;
+        
+        break;
+    };
+
+    // from ascii code to equivalent int
+    return c - '0' - 1;
 }
 
 #ifndef release
