@@ -44,13 +44,15 @@ struct keystate { char pressed, which; };
 // - rl_keystates: real physical states of the keys on the keyboard
 // - vr_keystates: the virtually emulated states of the keys
 static struct {
-    char *wr_target, *rd_target, running;
+    // char *wr_target, *rd_target, running;
+    char *wr_target, rd_target[275], running;
     int write_fd, read_fd, rl_keystates[4];
     struct keystate vr_keystates[4];
 } context = {
     .running = 1,
     .wr_target = "/dev/uinput",
-    .rd_target = NULL,
+    // .rd_target = NULL,
+    .rd_target = { 0 },
     .rl_keystates = { 0 },
     .vr_keystates = {
         { 0, KEY_W },
@@ -63,7 +65,7 @@ static struct {
 const char *BY_ID = "/dev/input/by-id/";
 const char *BY_PATH = "/dev/input/by-path/";
 
-char *get_keyboard(void);
+int get_keyboard(void);
 
 void sigint_handler(int sig);
 void emit(int type, int code, int value);
@@ -90,8 +92,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    context.rd_target = get_keyboard();
-    if (context.rd_target == NULL) {
+    if (!get_keyboard()) {
         fprintf(stderr, "error: Failed to get keyboards\n");
         exit(1);
     }
@@ -119,7 +120,7 @@ int main(int argc, char **argv) {
     
     #endif
 
-    const int size = sizeof(struct input_event);
+    const int SIZE = sizeof(struct input_event);
 
     struct input_event ev[64];
     memset(ev, 0, sizeof(ev));
@@ -127,7 +128,7 @@ int main(int argc, char **argv) {
     while (context.running) { 
         // if reading from keyboard returns less than the size of one input_event it failed
         // this is also blocking to avoid freezing the computer
-        if (read(context.read_fd, ev, size * 64) < size) {
+        if (read(context.read_fd, ev, SIZE * 64) < SIZE) {
             fprintf(stderr, "failed to read input: %s\n", strerror(errno));
             break;
         }
@@ -292,25 +293,24 @@ void emit_all() {
     }
 }
 
-char *get_keyboard() {
+int get_keyboard() {
     DIR *d;
     struct dirent *dir;
 
     // max unix filename plus lenght of BY_PATH which is the longer of the two
-    char *abs_device_path = malloc(sizeof(char) * 275);
+    // char *abs_device_path = malloc(sizeof(char) * 275);
 
     if ((d = opendir(BY_ID)) != NULL)
-        strcpy(abs_device_path, BY_ID);
+        strcpy(context.rd_target, BY_ID);
     // fixme: its possible that a computer doesn't have BY_ID,
     // so this is an alternative, but this is not fully implemented yet and
     // will yeild no results in the next step
     else if ((d = opendir(BY_PATH)) != NULL) {
         // strcpy(abs_device_path, BY_PATH);
         fprintf(stderr, "error: Not implemented yet\n");
-        return NULL;
-    }
-    else 
-        return NULL;
+        return 0;
+    } else 
+        return 0;
 
     char *possible_devices[42];
     int j = -1;
@@ -332,19 +332,19 @@ char *get_keyboard() {
     }
 
     if (j == -1) {
-        free(abs_device_path);
-        return NULL;
+        // free(abs_device_path);
+        return 0;
     }
 
     // todo: if more than one entry, let the user choose which is the keyboard
     if (j > 0) puts("more than one possible keyboard found: trying the first one");
 
     // full path to the keyboard
-    strcat(abs_device_path, possible_devices[0]);
+    strcat(context.rd_target, possible_devices[0]);
 
     closedir(d);
 
-    return abs_device_path;
+    return 1;
 }
 
 #ifndef release
