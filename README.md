@@ -14,9 +14,7 @@ then you should be able to run it with `sudo ./socd`. To exit just hit `ctrl + c
 
 ## Possible errors
 In case of any errors it would be useful if you submitted an issue with any details regarding it, but here are some which may occur:
-- I've noticed that some machines don't have `/dev/input/by-id` which stores keyboard files, that are currently the only implemented way of reading keyboard inputs. In this case the program should exit with a non zero exit code and a message `"error: Not implemented yet"`.
-For now a workaround is to remove the call to `get_keyboard`, and set `rd_target` manually.
-
+- Some devices don't have `/dev/input/by-id/`, which is what I have primarily tested on, but it *should* also work from `/dev/input/by-path/`. I have not been able to test that. It may be that the program doesn't crash, but also just won't work as intended.
 - It could also be that the program mistakenly dismisses a valid keyboard and prints `"error: Failed to get keyboards"`.
 
 ## Why do I need it

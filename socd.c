@@ -114,6 +114,7 @@ int main(int argc, char **argv) {
     struct termios t_attrs;
     tcgetattr(STDIN_FILENO, &t_attrs);
 
+    // Enable raw input mode
     t_attrs.c_lflag &= ~(ECHO | ICANON);
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &t_attrs);
 
@@ -168,7 +169,8 @@ int main(int argc, char **argv) {
     close(context.write_fd);
     close(context.read_fd);
 
-    t_attrs.c_lflag &= ~(ECHO | ICANON);
+    // Disable raw input mode
+    t_attrs.c_lflag &= (ECHO | ICANON);
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &t_attrs);
 }
 
