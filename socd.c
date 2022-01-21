@@ -35,7 +35,7 @@ void *print_keystates(void *pi);
 // for storing virtual keystates
 // - pressed is a bool, 1: pressed 0: released
 // - which is what the corresponding key for this is in `linux/ 
-struct keystate { char pressed, which; };
+struct keystate { char pressed; int which; };
 
 // The global state of the program
 // - wr_target: write target. this is where the program will be sending input events
@@ -143,9 +143,12 @@ int main(int argc, char **argv) {
             break;
         }
 
-        // we only want wasd, abd this makes sure no other key makes it to `emit_all()`
-        if (ev[1].code != KEY_W && ev[1].code != KEY_A && ev[1].code != KEY_S && ev[1].code != KEY_D)
-            continue;
+        // we only want the registered movement keys, and this makes sure no other key makes it to `emit_all()`
+        if (ev[1].code != context.vr_keystates[W].which
+            && ev[1].code != context.vr_keystates[A].which
+            && ev[1].code != context.vr_keystates[S].which
+            && ev[1].code != context.vr_keystates[D].which
+        ) continue;
 
         // 1: press, 0: release
         if (ev[1].value == 1)
@@ -164,13 +167,18 @@ int main(int argc, char **argv) {
 
     puts("Stopping.");
 
+    // for (int i = 0; i <= 3; ++i) {
+    //     emit(EV_KEY, context.vr_keystates[i].which, 0);
+    //     emit(EV_SYN, SYN_REPORT, 0);
+    // }
+
     // cleanup
     result(ioctl(context.write_fd, UI_DEV_DESTROY));
     close(context.write_fd);
     close(context.read_fd);
 
     // Disable raw input mode
-    t_attrs.c_lflag &= (ECHO | ICANON);
+    t_attrs.c_lflag |= (ECHO | ICANON);
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &t_attrs);
 }
 
