@@ -67,7 +67,8 @@ const char *BY_ID = "/dev/input/by-id/";
 // Some devices may not have the above so this might work instead
 const char *BY_PATH = "/dev/input/by-path/";
 
-int get_keyboard(void);
+// int get_keyboard(void);
+int get_keyboard(const char *path);
 int prompt_user(int max);
 
 void sigint_handler(int sig);
@@ -97,10 +98,15 @@ int main(int argc, char **argv) {
 
     // todo: have to get the custom keys in this gap
 
-    if (get_keyboard()) {
+    if (get_keyboard(BY_ID) && get_keyboard(BY_PATH)) {
         fprintf(stderr, "error: Failed to get keyboards\n");
-        exit(1);
+        exit(1);   
     }
+
+    // if (get_keyboard()) {
+    //     fprintf(stderr, "error: Failed to get keyboards\n");
+    //     exit(1);
+    // }
 
     setup_write();
     
@@ -312,15 +318,20 @@ void emit_all() {
     }
 }
 
-int get_keyboard() {
+int get_keyboard(const char *path) {
     DIR *d;
     struct dirent *dir;
 
-    if ((d = opendir(BY_ID)) != NULL)
-        strcpy(context.rd_target, BY_ID);
-    else if ((d = opendir(BY_PATH)) != NULL)
-        strcpy(context.rd_target, BY_PATH);
-    else 
+    // if ((d = opendir(BY_ID)) != NULL)
+    //     strcpy(context.rd_target, BY_ID);
+    // else if ((d = opendir(BY_PATH)) != NULL)
+    //     strcpy(context.rd_target, BY_PATH);
+    // else 
+    //     return 1;
+
+    if ((d = opendir(path)) != NULL)
+        strcpy(context.rd_target, path);
+    else
         return 1;
 
     char *possible_devices[8];
