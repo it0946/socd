@@ -158,7 +158,6 @@ int main(int argc, char **argv) {
     result(ioctl(context.write_fd, UI_DEV_DESTROY));
     close(context.write_fd);
     close(context.read_fd);
-    free(context.rd_target);
 }
 
 void sigint_handler(int sig) {
