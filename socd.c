@@ -92,7 +92,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    if (!get_keyboard()) {
+    if (get_keyboard()) {
         fprintf(stderr, "error: Failed to get keyboards\n");
         exit(1);
     }
@@ -307,9 +307,9 @@ int get_keyboard() {
     else if ((d = opendir(BY_PATH)) != NULL) {
         // strcpy(abs_device_path, BY_PATH);
         fprintf(stderr, "error: Not implemented yet\n");
-        return 0;
+        return 1;
     } else 
-        return 0;
+        return 1;
 
     char *possible_devices[42];
     int j = -1;
@@ -332,7 +332,7 @@ int get_keyboard() {
 
     if (j == -1) {
         // free(abs_device_path);
-        return 0;
+        return 1;
     }
 
     // todo: if more than one entry, let the user choose which is the keyboard
@@ -343,7 +343,7 @@ int get_keyboard() {
 
     closedir(d);
 
-    return 1;
+    return 0;
 }
 
 #ifndef release
